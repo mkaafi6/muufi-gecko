@@ -106,7 +106,7 @@ class MainActivity : AppCompatActivity() {
 
         controller.ensureBuiltIn(UBO_XPI, UBO_ID)
             .accept(
-                { ext -> Log.i(TAG, "uBO installed: ${ext.id}") },
+                { ext -> Log.i(TAG, "uBO installed: ${ext?.id}") },
                 { e -> Log.e(TAG, "uBO install failed", e) }
             )
     }
