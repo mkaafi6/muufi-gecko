@@ -44,7 +44,8 @@ android {
 
     packaging {
         jniLibs {
-            useLegacyPackaging = true
+            // Store native libs compressed inside the APK (smaller download).
+            useLegacyPackaging = false
         }
     }
 }
