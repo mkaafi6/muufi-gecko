@@ -1,0 +1,56 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        run: |
+          SDK=""
+          for base in "$ANDROID_SDK_ROOT" "$ANDROID_HOME" /usr/local/lib/android/sdk "$HOME/Android/Sdk"; do
+            [ -n "$base" ] && [ -d "$base" ] || continue
+            SM=$(find "$base" -name sdkmanager -type f 2>/dev/null | head -1)
+            if [ -n "$SM" ]; then
+              SDK="$base"
+              echo "$(dirname "$SM")" >> "$GITHUB_PATH"
+            fi
+            [ -n "$SDK" ] && break
+          done
+          if [ -z "$SDK" ]; then echo "Android SDK not found"; exit 1; fi
+          echo "Using Android SDK: $SDK"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+
+      - name: Install SDK packages
+        run: |
+          sdkmanager --install "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+          yes | sdkmanager --licenses >/dev/null 2>&1 || true
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Build release APK
+        run: gradle :app:assembleRelease --no-daemon --stacktrace
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: muufi-gecko-apk
+          path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: error

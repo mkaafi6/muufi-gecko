@@ -1,0 +1,9 @@
+<resources>
+    <string name="app_name">muufi</string>
+    <string name="home">Home</string>
+    <string name="refresh">Refresh</string>
+    <string name="back">Back</string>
+    <string name="about">About</string>
+    <string name="about_title">About muufi</string>
+    <string name="about_body">muufi runs the Gecko engine with the real uBlock Origin extension built in.</string>
+</resources>
