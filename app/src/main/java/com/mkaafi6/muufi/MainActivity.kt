@@ -1,10 +1,12 @@
 package com.mkaafi6.muufi
 
+import android.content.Context
 import android.content.pm.ActivityInfo
 import android.os.Bundle
 import android.util.Log
 import android.view.View
 import android.widget.LinearLayout
+import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
@@ -17,8 +19,11 @@ import org.mozilla.geckoview.WebExtension
 import org.mozilla.geckoview.WebExtensionController
 
 /**
- * muufi (GeckoView edition) — full Gecko engine + the real uBlock Origin
- * extension, installed from the bundled signed .xpi.
+ * muufi (GeckoView edition) — full Gecko engine + the real uBlock Origin.
+ *
+ * Diagnostic build: adds a Block-ads On/Off toggle + uBO status + crash/failure
+ * toasts so we can tell whether a blank page is uBO over-blocking or a
+ * GeckoView content-process crash.
  */
 class MainActivity : AppCompatActivity() {
 
@@ -29,12 +34,28 @@ class MainActivity : AppCompatActivity() {
     private val homeUrl = "https://mkaafi6.github.io/muufi/"
     private val history = ArrayDeque<String>()
 
+    @Volatile
+    private var ubo: WebExtension? = null
+
+    @Volatile
+    private var uboState: String = "unknown"
+
     companion object {
         @Volatile
         private var runtime: GeckoRuntime? = null
         private const val TAG = "muufi"
         private const val UBO_XPI = "resource://android/assets/ublock_origin.xpi"
         private const val UBO_ID = "uBlock0@raymondhill.net"
+        private const val PREFS = "muufi"
+        private const val PREF_ADS = "block_ads"
+    }
+
+    private fun prefs() = getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    private fun adsEnabled(): Boolean = prefs().getBoolean(PREF_ADS, true)
+
+    private fun toast(msg: String) {
+        Log.i(TAG, msg)
+        runOnUiThread { Toast.makeText(this, msg, Toast.LENGTH_SHORT).show() }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -56,6 +77,14 @@ class MainActivity : AppCompatActivity() {
                 override fun onFullScreen(session: GeckoSession, fullScreen: Boolean) {
                     applyFullscreen(fullScreen)
                 }
+
+                override fun onCrash(session: GeckoSession) {
+                    toast("Gecko content process CRASHED")
+                }
+
+                override fun onKill(session: GeckoSession) {
+                    toast("Gecko content process was KILLED")
+                }
             }
 
             progressDelegate = object : GeckoSession.ProgressDelegate {
@@ -64,6 +93,10 @@ class MainActivity : AppCompatActivity() {
                         history.addLast(url)
                         if (history.size > 100) history.removeFirst()
                     }
+                }
+
+                override fun onPageStop(session: GeckoSession, success: Boolean) {
+                    if (!success) toast("Page failed to load")
                 }
             }
         }
@@ -90,7 +123,6 @@ class MainActivity : AppCompatActivity() {
                 origins: Array<out String>,
                 dataCollectionPermissions: Array<out String>
             ): GeckoResult<WebExtension.PermissionPromptResponse> {
-                Log.i(TAG, "Granting install for ${extension.metaData?.name}")
                 return GeckoResult.fromValue(
                     WebExtension.PermissionPromptResponse(true, true, true)
                 )
@@ -104,11 +136,18 @@ class MainActivity : AppCompatActivity() {
             ): GeckoResult<AllowOrDeny> = GeckoResult.fromValue(AllowOrDeny.ALLOW)
         }
 
-        controller.ensureBuiltIn(UBO_XPI, UBO_ID)
-            .accept(
-                { ext -> Log.i(TAG, "uBO installed: ${ext?.id}") },
-                { e -> Log.e(TAG, "uBO install failed", e) }
-            )
+        controller.ensureBuiltIn(UBO_XPI, UBO_ID).accept(
+            { ext ->
+                ubo = ext
+                uboState = "installed"
+                toast("uBO: $uboState")
+                if (!adsEnabled()) ext?.let { controller.disable(it) }
+            },
+            { e ->
+                uboState = "INSTALL FAILED"
+                toast("uBO install FAILED: ${e?.message}")
+            }
+        )
     }
 
     private fun wireBottomBar() {
@@ -119,13 +158,34 @@ class MainActivity : AppCompatActivity() {
             session.reload()
         }
         findViewById<LinearLayout>(R.id.btnBack).setOnClickListener { goBack() }
-        findViewById<LinearLayout>(R.id.btnInfo).setOnClickListener {
-            AlertDialog.Builder(this)
-                .setTitle(R.string.about_title)
-                .setMessage(R.string.about_body)
-                .setPositiveButton(android.R.string.ok, null)
-                .show()
+        findViewById<LinearLayout>(R.id.btnInfo).setOnClickListener { showAbout() }
+    }
+
+    private fun showAbout() {
+        val uboLine = "uBlock Origin: $uboState"
+        val adsLine = "Block ads: " + if (adsEnabled()) "ON" else "OFF"
+        AlertDialog.Builder(this)
+            .setTitle(R.string.about_title)
+            .setMessage(getString(R.string.about_body) + "\n\n$uboLine\n$adsLine")
+            .setPositiveButton("Toggle ads") { _, _ -> toggleAds() }
+            .setNeutralButton("Reload") { _, _ -> session.reload() }
+            .setNegativeButton("Close", null)
+            .show()
+    }
+
+    private fun toggleAds() {
+        val nowEnabled = !adsEnabled()
+        prefs().edit().putBoolean(PREF_ADS, nowEnabled).apply()
+        val rt = runtime
+        val ext = ubo
+        if (rt != null && ext != null) {
+            if (nowEnabled) rt.webExtensionController.enable(ext)
+            else rt.webExtensionController.disable(ext)
+            toast("Block ads: " + if (nowEnabled) "ON" else "OFF")
+        } else {
+            toast("uBO not available (install failed)")
         }
+        session.reload()
     }
 
     private fun goBack() {
