@@ -99,6 +99,7 @@ class MainActivity : AppCompatActivity() {
 
             progressDelegate = object : GeckoSession.ProgressDelegate {
                 override fun onPageStart(session: GeckoSession, url: String) {
+                    currentUrl = url
                     if (history.lastOrNull() != url) {
                         history.addLast(url)
                         if (history.size > 100) history.removeFirst()
@@ -131,7 +132,7 @@ class MainActivity : AppCompatActivity() {
         session.loadUri(homeUrl)
     }
 
-    /** Installs the bundled uBlock Origin .xpi, auto-approving its permissions. */
+    /** Installs the bundled uBlock Origin (unpacked under assets/ublock_origin/). */
     private fun installUblock(rt: GeckoRuntime) {
         val controller = rt.webExtensionController
         controller.promptDelegate = object : WebExtensionController.PromptDelegate {
@@ -154,7 +155,7 @@ class MainActivity : AppCompatActivity() {
             ): GeckoResult<AllowOrDeny> = GeckoResult.fromValue(AllowOrDeny.ALLOW)
         }
 
-        controller.install(UBO_XPI, WebExtensionController.INSTALLATION_METHOD_FROM_FILE).accept(
+        controller.ensureBuiltIn(UBO_URI, UBO_ID).accept(
             { ext ->
                 ubo = ext
                 uboState = "installed"
@@ -221,7 +222,7 @@ class MainActivity : AppCompatActivity() {
             try {
                 session.open(rt)
                 geckoView.setSession(session)
-                session.loadUri(homeUrl)
+                session.loadUri(currentUrl ?: homeUrl)
             } catch (t: Throwable) {
                 toast("recover failed: ${t.message}")
             }
