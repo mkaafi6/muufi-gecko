@@ -5,7 +5,7 @@ plugins {
 
 android {
     namespace = "com.mkaafi6.muufi"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.mkaafi6.muufi"
@@ -51,5 +51,5 @@ android {
 
 dependencies {
     implementation("androidx.appcompat:appcompat:1.7.0")
-    implementation("org.mozilla.geckoview:geckoview-omni:157.0.20260924084938")
+    implementation("org.mozilla.geckoview:geckoview-omni:147.0.20260212191108")
 }

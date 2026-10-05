@@ -37,13 +37,13 @@ jobs:
 
       - name: Install SDK packages
         run: |
-          sdkmanager --install "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+          sdkmanager --install "platforms;android-36" "build-tools;36.0.0" "platform-tools"
           yes | sdkmanager --licenses >/dev/null 2>&1 || true
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: "8.9"
+          gradle-version: "8.11.1"
 
       - name: Build release APK
         run: gradle :app:assembleRelease --no-daemon --stacktrace
