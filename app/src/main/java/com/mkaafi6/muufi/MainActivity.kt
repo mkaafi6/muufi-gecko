@@ -13,6 +13,7 @@ import androidx.appcompat.widget.Toolbar
 import org.mozilla.geckoview.AllowOrDeny
 import org.mozilla.geckoview.GeckoResult
 import org.mozilla.geckoview.GeckoRuntime
+import org.mozilla.geckoview.GeckoRuntimeSettings
 import org.mozilla.geckoview.GeckoSession
 import org.mozilla.geckoview.GeckoView
 import org.mozilla.geckoview.WebExtension
@@ -40,11 +41,18 @@ class MainActivity : AppCompatActivity() {
     @Volatile
     private var uboState: String = "unknown"
 
+    /** Last URL we navigated to, used to recover after a process kill. */
+    @Volatile
+    private var currentUrl: String? = null
+
     companion object {
         @Volatile
         private var runtime: GeckoRuntime? = null
         private const val TAG = "muufi"
-        private const val UBO_XPI = "resource://android/assets/ublock_origin.xpi"
+        // Built-in extensions are installed from an *unpacked folder* under
+        // assets, not from an .xpi file (an .xpi yields
+        // "This URL does not point to a folder").
+        private const val UBO_URI = "resource://android/assets/ublock_origin/"
         private const val UBO_ID = "uBlock0@raymondhill.net"
         private const val PREFS = "muufi"
         private const val PREF_ADS = "block_ads"
@@ -79,11 +87,13 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 override fun onCrash(session: GeckoSession) {
-                    toast("Gecko content process CRASHED")
+                    toast("Gecko content process CRASHED — recovering")
+                    recoverSession()
                 }
 
                 override fun onKill(session: GeckoSession) {
-                    toast("Gecko content process was KILLED")
+                    toast("Gecko content process was KILLED — recovering")
+                    recoverSession()
                 }
             }
 
@@ -102,7 +112,15 @@ class MainActivity : AppCompatActivity() {
         }
 
         if (runtime == null) {
-            runtime = GeckoRuntime.create(this)
+            // Conservative process settings: some custom ROMs/devices kill Gecko's
+            // content process (app-zygote / isolation / fission). Disabling those
+            // keeps it in a plain child process that survives.
+            val settings = GeckoRuntimeSettings.Builder()
+                .appZygoteProcessEnabled(false)
+                .isolatedProcessEnabled(false)
+                .fissionEnabled(false)
+                .build()
+            runtime = GeckoRuntime.create(this, settings)
         }
         session.open(runtime!!)
         geckoView.setSession(session)
@@ -136,7 +154,7 @@ class MainActivity : AppCompatActivity() {
             ): GeckoResult<AllowOrDeny> = GeckoResult.fromValue(AllowOrDeny.ALLOW)
         }
 
-        controller.ensureBuiltIn(UBO_XPI, UBO_ID).accept(
+        controller.install(UBO_XPI, WebExtensionController.INSTALLATION_METHOD_FROM_FILE).accept(
             { ext ->
                 ubo = ext
                 uboState = "installed"
@@ -194,6 +212,19 @@ class MainActivity : AppCompatActivity() {
             session.goBack()
         } else {
             finish()
+        }
+    }
+
+    private fun recoverSession() {
+        val rt = runtime ?: return
+        runOnUiThread {
+            try {
+                session.open(rt)
+                geckoView.setSession(session)
+                session.loadUri(homeUrl)
+            } catch (t: Throwable) {
+                toast("recover failed: ${t.message}")
+            }
         }
     }
 

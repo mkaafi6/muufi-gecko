@@ -42,11 +42,21 @@ android {
         jvmTarget = "17"
     }
 
+    androidResources {
+        // AAPT strips files/folders whose names start with "_" by default.
+        // WebExtensions need those (uBlock Origin ships `_locales/`), so use
+        // the same relaxed pattern Mozilla uses in geckoview_example. Without
+        // this, uBO's manifest localization fails and the install is rejected.
+        ignoreAssetsPattern = "!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~"
+    }
+
     packaging {
         jniLibs {
-            // Legacy packaging compresses the native libs inside the APK
-            // (smaller download than the page-aligned default).
-            useLegacyPackaging = true
+            // Keep Gecko's native libraries uncompressed and page-aligned in
+            // the APK (Mozilla's default). The APK is bigger (~190 MB), but the
+            // content process loads `libxul.so` straight from the APK, which is
+            // the configuration GeckoView is actually built and tested for.
+            useLegacyPackaging = false
         }
     }
 }
