@@ -141,7 +141,7 @@ class MainActivity : AppCompatActivity() {
                 ubo = ext
                 uboState = "installed"
                 toast("uBO: $uboState")
-                if (!adsEnabled()) ext?.let { controller.disable(it) }
+                if (!adsEnabled()) ext?.let { controller.disable(it, WebExtensionController.EnableSource.USER) }
             },
             { e ->
                 uboState = "INSTALL FAILED"
@@ -179,8 +179,8 @@ class MainActivity : AppCompatActivity() {
         val rt = runtime
         val ext = ubo
         if (rt != null && ext != null) {
-            if (nowEnabled) rt.webExtensionController.enable(ext)
-            else rt.webExtensionController.disable(ext)
+            if (nowEnabled) rt.webExtensionController.enable(ext, WebExtensionController.EnableSource.USER)
+            else rt.webExtensionController.disable(ext, WebExtensionController.EnableSource.USER)
             toast("Block ads: " + if (nowEnabled) "ON" else "OFF")
         } else {
             toast("uBO not available (install failed)")
